@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>STAMA CUP MLBB</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    background: url('assets/bg.png') center/cover no-repeat;
+    background-attachment: fixed;
+    color: white;
+    overflow-x: hidden;
+  }
+
+  .teams-row {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .team-column {
+    width: 48%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .heroes-row {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px 0;
+  }
+
+  .hero-slot {
+    width: 200px;
+    height: 200px;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.6s ease;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  .hero-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+    will-change: transform, opacity;
+  }
+
+  .hero-slot.revealed img {
+    display: block;
+    animation: slideDown 0.55s cubic-bezier(.2,.9,.3,1),
+               floatLoop 3.6s ease-in-out infinite;
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes floatLoop {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  /* Glowing borders */
+  .glow-blue {
+    border: 3px solid #3b82f6;
+    box-shadow: 0 0 25px #3b82f6aa, 0 0 50px #3b82f6aa;
+    animation: bluePulse 2s ease-in-out infinite alternate;
+  }
+  .glow-red {
+    border: 3px solid #ef4444;
+    box-shadow: 0 0 25px #ef4444aa, 0 0 50px #ef4444aa;
+    animation: redPulse 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes bluePulse {
+    0% { box-shadow: 0 0 10px #3b82f655, 0 0 25px #3b82f6aa; }
+    100% { box-shadow: 0 0 25px #3b82f6bb, 0 0 60px #3b82f6dd; }
+  }
+
+  @keyframes redPulse {
+    0% { box-shadow: 0 0 10px #ef444455, 0 0 25px #ef4444aa; }
+    100% { box-shadow: 0 0 25px #ef4444bb, 0 0 60px #ef4444dd; }
+  }
+
+  .ban-slot {
+    width: 100px;
+    height: 100px;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ban-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: grayscale(100%);
+  }
+
+  #countdown {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8rem;
+    font-weight: bold;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    text-shadow: 0 6px 20px rgba(0,0,0,0.6);
+  }
+
+  /* Fullscreen loading image overlay */
+  #loadingScreen {
+    position: fixed;
+    inset: 0;
+    background: url('assets/loading.png') center/cover no-repeat;
+    z-index: 100;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+
+  @media (max-width: 900px) {
+    .hero-slot { width: 140px; height: 140px; }
+    .ban-slot { width: 80px; height: 80px; }
+  }
+</style>
+</head>
+<body class="text-white flex flex-col items-center justify-center min-h-screen relative">
+
+<h1 class="text-3xl font-bold mt-4 mb-6 text-center drop-shadow-lg">🎮 STAMACUP</h1>
+
+<!-- Countdown -->
+<div id="countdown"></div>
+
+<!-- Loading screen overlay -->
+<div id="loadingScreen"></div>
+
+<!-- Bans -->
+<div class="flex justify-between w-full max-w-6xl mb-6 px-4">
+  <div id="blueBans" class="flex gap-3 flex-wrap justify-start w-1/2"></div>
+  <div id="redBans" class="flex gap-3 flex-wrap justify-end w-1/2"></div>
+</div>
+
+<!-- Horizontal Teams Row -->
+<div class="teams-row px-4">
+  <!-- Blue Team -->
+  <div class="team-column">
+    <img id="blueLogo" src="assets/bteam.png" alt="Blue Logo" class="w-28 h-28 object-contain mb-2">
+    <h2 id="blueName" class="text-2xl font-semibold mb-3">Blue Team</h2>
+    <div id="blueTeam" class="heroes-row"></div>
+  </div>
+
+  <!-- VS -->
+  <div class="text-5xl font-extrabold text-gray-300">VS</div>
+
+  <!-- Red Team -->
+  <div class="team-column">
+    <img id="redLogo" src="assets/rteam.png" alt="Red Logo" class="w-28 h-28 object-contain mb-2">
+    <h2 id="redName" class="text-2xl font-semibold mb-3">Red Team</h2>
+    <div id="redTeam" class="heroes-row"></div>
+  </div>
+</div>
+
+<script>
+const channel = new BroadcastChannel('mlbb_draft');
+const loadingScreen = document.getElementById('loadingScreen');
+const countdownEl = document.getElementById('countdown');
+
+function createSlots(id, count, type) {
+  const container = document.getElementById(id);
+  const isBlue = id.startsWith('blue');
+  for (let i = 0; i < count; i++) {
+    const div = document.createElement('div');
+    div.className = type === 'hero' ? 'hero-slot' : 'ban-slot';
+    div.classList.add(isBlue ? 'glow-blue' : 'glow-red');
+    const img = document.createElement('img');
+    div.appendChild(img);
+    container.appendChild(div);
+  }
+}
+
+createSlots('blueTeam', 5, 'hero');
+createSlots('redTeam', 5, 'hero');
+createSlots('blueBans', 5, 'ban');
+createSlots('redBans', 5, 'ban');
+
+channel.onmessage = (event) => {
+  const { team, slot, hero, locked, isBan, teamName, teamLogo, countdown } = event.data;
+
+  if (teamName !== undefined)
+    document.getElementById(team + 'Name').textContent = teamName;
+  if (teamLogo !== undefined)
+    document.getElementById(team + 'Logo').src = teamLogo;
+
+  if (isBan) {
+    const slotEl = document.getElementById(team + 'Bans').children[slot];
+    slotEl.querySelector('img').src = `heroes/${hero.toLowerCase()}.png`;
+    return;
+  }
+
+  if (locked) {
+    const slotEl = document.getElementById(team + 'Team').children[slot];
+    const img = slotEl.querySelector('img');
+    img.src = `heroes/${hero.toLowerCase()}.png`;
+    slotEl.classList.add('revealed');
+  }
+
+  // COUNTDOWN HANDLING
+  if (countdown !== undefined) {
+    if (countdown > 0) {
+      countdownEl.textContent = countdown;
+      countdownEl.style.opacity = 1;
+    } else if (countdown === 0) {
+      countdownEl.style.opacity = 0;
+      // Show loading overlay
+      loadingScreen.style.display = 'block';
+      setTimeout(() => loadingScreen.style.opacity = 1, 10);
+    }
+  }
+};
+</script>
+</body>
+</html>

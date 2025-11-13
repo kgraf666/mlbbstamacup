@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>STAMA CUP MLBB Control</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background-color: #0f172a; color: white; }
+  button { transition: all 0.18s; }
+
+  /* thumb in modal */
+  .hero-thumb {
+    width: 80px;
+    height: 80px;
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.16s, border-color 0.16s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .hero-thumb:hover {
+    transform: scale(1.06);
+    border-color: #38bdf8;
+  }
+  .hero-thumb img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; }
+
+  /* small preview next to button */
+  .preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+  }
+  .preview img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
+  .preview .pname { font-size: 0.85rem; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .controls-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .slot-wrapper { display:flex; align-items:center; gap:8px; }
+
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-6">
+
+<h1 class="text-3xl font-bold mb-6 text-center">🎮 STAMA CUP MLBB - Control Panel</h1>
+
+<!-- TEAM SETTINGS -->
+<div class="flex gap-8 mb-8">
+  <div class="flex flex-col items-center">
+    <h2 class="text-xl mb-2">Blue Team</h2>
+    <input type="text" id="blueTeamName" placeholder="Enter Blue Team Name" class="p-2 mb-2 w-48 text-center bg-slate-800 border border-slate-600 rounded">
+    <input type="file" id="blueLogoInput" accept="image/*" class="mb-2">
+    <button onclick="updateTeam('blue')" class="bg-blue-600 px-3 py-1 rounded hover:bg-blue-700">Update</button>
+  </div>
+  <div class="flex flex-col items-center">
+    <h2 class="text-xl mb-2">Red Team</h2>
+    <input type="text" id="redTeamName" placeholder="Enter Red Team Name" class="p-2 mb-2 w-48 text-center bg-slate-800 border border-slate-600 rounded">
+    <input type="file" id="redLogoInput" accept="image/*" class="mb-2">
+    <button onclick="updateTeam('red')" class="bg-red-600 px-3 py-1 rounded hover:bg-red-700">Update</button>
+  </div>
+</div>
+
+<hr class="border-gray-500 w-full mb-6">
+
+<!-- HERO PICK SECTION -->
+<div class="w-full max-w-5xl flex flex-col gap-6">
+  <div>
+    <h2 class="text-2xl mb-2 text-blue-400">Blue Team Picks</h2>
+    <div id="blueHeroes" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <div>
+    <h2 class="text-2xl mb-2 text-red-400">Red Team Picks</h2>
+    <div id="redHeroes" class="flex flex-wrap gap-2"></div>
+  </div>
+</div>
+
+<!-- BANS -->
+<div class="w-full max-w-5xl mt-10 flex flex-col gap-6">
+  <div>
+    <h2 class="text-xl mb-2 text-blue-300">Blue Team Bans</h2>
+    <div id="blueBans" class="flex flex-wrap gap-2"></div>
+  </div>
+  <div>
+    <h2 class="text-xl mb-2 text-red-300">Red Team Bans</h2>
+    <div id="redBans" class="flex flex-wrap gap-2"></div>
+  </div>
+</div>
+
+<!-- COUNTDOWN CONTROL -->
+<div class="mt-10">
+  <button id="startCountdown" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">
+    ▶️ Start Countdown
+  </button>
+</div>
+
+<!-- HERO SELECTION MODAL -->
+<div id="heroModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
+  <div class="bg-slate-900 p-6 rounded-lg w-11/12 max-w-5xl max-h-[80vh] overflow-y-auto">
+    <h3 class="text-2xl mb-4 text-center">Select a Hero</h3>
+    <div id="heroGrid" class="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-4 justify-items-center"></div>
+    <div class="text-center mt-4">
+      <button onclick="closeModal()" class="bg-red-600 px-4 py-2 rounded hover:bg-red-700">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const channel = new BroadcastChannel('mlbb_draft');
+
+/* hero list (same as before) */
+const heroes = [
+  "aamon", "akai", "aldous", "alice", "alpha", "alucard", "angela", "argus", "arlott", "atlas", "aulus", "aurora", "badang", "balmond", "bane", "barats", "baxia", "beatrix", "belerick", "benedetta", "brody", "bruno", "carmilla", "cecilion", "change", "chip", "chou", "cici", "claude", "clint", "cyclops", "diggie", "dyrroth", "edith", "empty", "empty", "esmeralda", "estes", "eudora", "Fanny", "faramis", "floryn", "franco", "freddin", "freya", "gatotkaca", "gloo", "gord", "granger", "grock", "guinevere", "gusion", "hanabi", "hanzo", "harith", "harley", "hayabusa", "helcurt", "hilda", "hylos", "irithel", "ixia", "jawhead", "johnson", "joy", "julian", "kadita", "kagura", "kaja", "kalea", "karina", "karrie", "khaleed", "khufra", "kimmy", "lancelot", "lapulapu", "Layla", "leomord", "lesley", "ling", "lolita", "lukas", "lunox", "luo yi", "lylia", "martis", "masha", "mathilda", "melissa", "minotaur", "minsitthar", "miya", "moskov", "nana", "natalia", "natan", "nolan", "novaria", "obsidia", "odette", "paquito", "phoveus", "phrasa", "popolandkupa", "rafaela", "roger", "ruby", "saber", "selena", "silvanna", "sun", "suyou", "terizla", "thamuz", "tigreal", "uranus", "vale", "valentina", "valir", "vexana", "wanwan", "xavier", "xborg", "yin", "yisunshin", "yu zhong", "yve", "zetian", "zhask", "zhuxin", "zilong"
+];
+
+let currentSelection = null;
+
+/* Create pick/ban buttons + preview area for each slot */
+function createPickButtons(team, type, count) {
+  const container = document.getElementById(team + (type === 'ban' ? 'Bans' : 'Heroes'));
+  for (let i = 0; i < count; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'slot-wrapper';
+
+    const btn = document.createElement('button');
+    btn.textContent = type === 'ban' ? 'Choose Ban' : 'Choose Hero';
+    btn.className = type === 'ban'
+      ? 'bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700'
+      : (team === 'blue'
+          ? 'bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700'
+          : 'bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700');
+
+    btn.onclick = () => openModal(team, i, type === 'ban');
+
+    // preview area (initially empty)
+    const preview = document.createElement('div');
+    preview.className = 'preview';
+    preview.style.display = 'none'; // hide until a pick is made
+    preview.innerHTML = `
+      <img src="" alt="preview">
+      <div class="pname"></div>
+    `;
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(preview);
+    container.appendChild(wrapper);
+  }
+}
+
+function openModal(team, slot, isBan) {
+  currentSelection = { team, slot, isBan };
+  const modal = document.getElementById('heroModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeModal() {
+  const modal = document.getElementById('heroModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+/* Build the hero grid modal; shows names under thumbs */
+function setupHeroGrid() {
+  const grid = document.getElementById('heroGrid');
+  heroes.forEach(hero => {
+    const div = document.createElement('div');
+    div.className = 'hero-thumb';
+    // include name below image
+    div.innerHTML = `<img src="heroes/${hero}.png" alt="${hero}"><div class="hero-name text-xs text-center text-white/90">${hero}</div>`;
+    div.onclick = () => {
+      const { team, slot, isBan } = currentSelection;
+      // send pick/ban message
+      channel.postMessage({
+        team: team,
+        slot: slot,
+        hero: hero,
+        locked: !isBan,
+        isBan: isBan
+      });
+
+      // update control preview locally
+      updatePreview(team, slot, hero, isBan);
+
+      closeModal();
+    };
+    grid.appendChild(div);
+  });
+}
+
+/* update the small preview next to the button in control panel */
+function updatePreview(team, slot, hero, isBan) {
+  const container = document.getElementById(team + (isBan ? 'Bans' : 'Heroes'));
+  const wrapper = container.children[slot];
+  if (!wrapper) return;
+  const preview = wrapper.querySelector('.preview');
+  const img = preview.querySelector('img');
+  const pname = preview.querySelector('.pname');
+
+  img.src = `heroes/${hero}.png`;
+  pname.textContent = hero;
+  preview.style.display = 'flex';
+}
+
+/* Team logo/name update */
+function updateTeam(team) {
+  const nameInput = document.getElementById(team + 'TeamName').value;
+  const logoInput = document.getElementById(team + 'LogoInput').files[0];
+  
+  if (logoInput) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      channel.postMessage({
+        team: team,
+        teamName: nameInput,
+        teamLogo: e.target.result
+      });
+    };
+    reader.readAsDataURL(logoInput);
+  } else {
+    channel.postMessage({
+      team: team,
+      teamName: nameInput
+    });
+  }
+}
+
+/* Initialize buttons and grid */
+createPickButtons('blue', 'hero', 5);
+createPickButtons('red', 'hero', 5);
+createPickButtons('blue', 'ban', 5);
+createPickButtons('red', 'ban', 5);
+setupHeroGrid();
+
+/* Keep control's preview synced if another control instance sends selection (optional) */
+channel.onmessage = (e) => {
+  const { team, slot, hero, locked, isBan } = e.data;
+  if (team !== undefined && slot !== undefined && hero !== undefined) {
+    // reflect on this control interface as well
+    updatePreview(team, slot, hero, isBan);
+  }
+}
+
+/* Countdown */
+document.getElementById('startCountdown').onclick = () => {
+  let count = 10;
+  const interval = setInterval(() => {
+    channel.postMessage({ countdown: count });
+    count--;
+    if (count < 0) {
+      clearInterval(interval);
+      channel.postMessage({ countdown: 0 });
+    }
+  }, 1000);
+};
+</script>
+</body>
+</html>
